@@ -118,7 +118,7 @@ class HourGlassBlock(nn.Module):
 
 # Stacked HourGlass Bit
 class StackedHourGlassBlock(nn.Module):
-    def __init__(self, num_stacks=2, num_joints=21, depth=4, channels=256):
+    def __init__(self, num_stacks=2, num_joints=42, depth=4, channels=256):
         super().__init__()
         self.num_stacks = num_stacks
         
@@ -195,6 +195,6 @@ class StackedHourGlassBlock(nn.Module):
             if i < self.num_stacks - 1:
                 out = out + self.merge_feats[i](feat) + self.merge_preds[i](out1)
             
-        return combinations
+        return torch.stack(combinations)
 
 

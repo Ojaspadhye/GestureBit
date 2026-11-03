@@ -12,7 +12,7 @@ sys.path.insert(0, "C:/Users/Admin/Desktop/SHRG-Net")
 from Logs.logger import logger
 from src.model.StackedHourGlass import StackedHourGlassBlock
 from src.model.lossfunction import MSELossFuntion
-from Scripts.test_train import HandDataset
+from Scripts.test_train import HandDataset, generate_heatmap
 
 ## DEvice check
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -24,7 +24,7 @@ print(f"Devie used: {device}")
 print(f"Start Time: {time.ctime(time.time())}")
 logger.info(f"Eperiment started {time.ctime(time.time())}")
 print("==========================")
-
+print("")
 
 IMAGE_DIR = "C:/Users/Admin/Desktop/SHRG-Net/Data/images/InterHand2.6M_5fps_batch1/images/test/Capture1/ROM05_RT_Wrist_ROM/cam400283"
 JSON_DATA = "C:/Users/Admin/Desktop/SHRG-Net/Data/InterHand2.6M_train_data.json"
@@ -52,6 +52,8 @@ for image in images:
             idx_counter += 1
             break
 
+print(dataset_dict)
+
 train_data = HandDataset(data=dataset_dict)
 
 train_loader = DataLoader(
@@ -60,11 +62,12 @@ train_loader = DataLoader(
     shuffle=True
 )
 
-##
+## Model Bit
 
-model = StackedHourGlassBlock()
+model = StackedHourGlassBlock().to(device)
 optimiser = SGD(params=model.parameters())
 loss_func = MSELossFuntion()
+#train_data = DataLoader(train_data)
 
 epoh_loss_list = []
 
@@ -72,25 +75,45 @@ epoh_loss_list = []
 epohes = 1
 for epoh in tqdm(range(epohes)):
     model.train()
-
     running_loss = 0.0
     total_sample = 0
 
-    for bath, (input, targets) in enumerate(train_loader):
+    for batch_idx, (inputs, targets, valid_mask) in (enumerate(train_loader)):
+
+        inputs = inputs.to(device)
+        logger.info(type(inputs))
+        logger.info(f"inputs: {inputs.shape}")
+        targets = targets.to(device)
+        valid_mask = valid_mask.to(device)
+        logger.info(valid_mask)
+
         optimiser.zero_grad()
 
-        outputs = model(input)
-        loss = loss_func(outputs, targets)
+        outputs = model(inputs)[-1]
+        logger.info(type(outputs))
+        logger.info(f"outputs: {outputs.shape}")
+
+        logger.info(type(targets))
+        logger.info(f"targets: {targets.shape}")
+
+        logger.info("")
+#        logger.info(targets)
+#        logger.info("===========================================")
+#        logger.info(outputs)
+
+        loss = 0.0
+        for out_stack in outputs:
+            logger.info(out_stack, targets, valid_mask)
+            loss += loss_func(out_stack, targets, valid_mask)
+
+        print(loss.item())
 
         loss.backward()
-
         optimiser.step()
 
-        running_loss += loss.item() * input.size(0)
-        total_sample += input.sie(0)
-
-        if outputs.ndim > 1 and outputs.size(1) > 1:
-            preds = torch.argmax(outputs, dim=1)
+        batch_size = inputs.size(0)
+        running_loss += loss.item() * batch_size
+        total_sample += batch_size  # Fixed typo: sie -> size
 
     epoh_loss = running_loss / total_sample
     epoh_loss_list.append(epoh_loss)
@@ -105,4 +128,9 @@ print(f"Optimiser Used: {optimiser.__class__.__name__}")
 print(f"Loss Funtion: {loss_func.__class__.__name__}")
 print("==========================")
 print("")
+print
 
+print("==========================")
+print(f"Sum Loss: {sum(epoh_loss_list)}")
+print(f"Loss: {epoh_loss_list}")
+print("==========================")
