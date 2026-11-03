@@ -1,7 +1,7 @@
 ## imports
 import torch
 from tqdm import tqdm
-from torch.optim import SGD
+from torch.optim import SGD, lr_scheduler
 import sys
 import time
 import os, json
@@ -26,9 +26,12 @@ logger.info(f"Eperiment started {time.ctime(time.time())}")
 print("==========================")
 print("")
 
-IMAGE_DIR = "C:/Users/Admin/Desktop/SHRG-Net/Data/images/InterHand2.6M_5fps_batch1/images/test/Capture1/ROM05_RT_Wrist_ROM/cam400283"
+IMAGE_DIR = "C:/Users/Admin/Desktop/SHRG-Net/Data/test1_image/train"
 JSON_DATA = "C:/Users/Admin/Desktop/SHRG-Net/Data/InterHand2.6M_train_data.json"
 
+
+print("==========================")
+print("Colletion and mathing of images to annotations")
 ##
 images = os.listdir(IMAGE_DIR)
 with open(JSON_DATA, "r") as f:
@@ -37,7 +40,7 @@ with open(JSON_DATA, "r") as f:
 dataset_dict = {}
 idx_counter = 0
 
-for image in images:
+for i, image in tqdm(enumerate(images)):
     ids = image.replace("image", "").replace(".jpg", "")
     if not ids.isdigit():
         continue
@@ -52,7 +55,13 @@ for image in images:
             idx_counter += 1
             break
 
-print(dataset_dict)
+
+
+print("==========================")
+print("")
+print("==========================")
+print("Training Initiated")
+print("==========================")
 
 train_data = HandDataset(data=dataset_dict)
 
@@ -65,48 +74,49 @@ train_loader = DataLoader(
 ## Model Bit
 
 model = StackedHourGlassBlock().to(device)
-optimiser = SGD(params=model.parameters())
+optimiser = SGD(params=model.parameters(), lr=0.001, momentum=0.9)
+shedular = lr_scheduler.ExponentialLR(optimizer=optimiser, gamma=0.9)
 loss_func = MSELossFuntion()
 #train_data = DataLoader(train_data)
 
 epoh_loss_list = []
 
 
-epohes = 1
+epohes = 80
 for epoh in tqdm(range(epohes)):
     model.train()
     running_loss = 0.0
     total_sample = 0
 
-    for batch_idx, (inputs, targets, valid_mask) in (enumerate(train_loader)):
+    for batch_idx, (inputs, targets, valid_mask) in tqdm(enumerate(train_loader)):
 
         inputs = inputs.to(device)
-        logger.info(type(inputs))
-        logger.info(f"inputs: {inputs.shape}")
+#        logger.info(type(inputs))
+#        logger.info(f"inputs: {inputs.shape}")
         targets = targets.to(device)
         valid_mask = valid_mask.to(device)
+
         logger.info(valid_mask)
 
         optimiser.zero_grad()
 
-        outputs = model(inputs)[-1]
+        outputs = model(inputs)
         logger.info(type(outputs))
         logger.info(f"outputs: {outputs.shape}")
 
         logger.info(type(targets))
         logger.info(f"targets: {targets.shape}")
 
-        logger.info("")
+#        logger.info("")
 #        logger.info(targets)
 #        logger.info("===========================================")
 #        logger.info(outputs)
 
         loss = 0.0
         for out_stack in outputs:
-            logger.info(out_stack, targets, valid_mask)
+#            logger.info(out_stack, targets, valid_mask)
             loss += loss_func(out_stack, targets, valid_mask)
 
-        print(loss.item())
 
         loss.backward()
         optimiser.step()
@@ -126,6 +136,8 @@ print(f"Model Name: {model.__class__.__name__}")
 print(f"Number of Epohes: {epohes}")
 print(f"Optimiser Used: {optimiser.__class__.__name__}")
 print(f"Loss Funtion: {loss_func.__class__.__name__}")
+print("Firt 50 epoh ll 0.001")
+print("last 30 epoh ll 0.0001")
 print("==========================")
 print("")
 print
@@ -134,3 +146,6 @@ print("==========================")
 print(f"Sum Loss: {sum(epoh_loss_list)}")
 print(f"Loss: {epoh_loss_list}")
 print("==========================")
+
+torch.save(model.state_dict(), "model_weights.pth")
+torch.save(model, "omplete_model.pth")
